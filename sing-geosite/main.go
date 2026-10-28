@@ -212,12 +212,8 @@ func loadCustomRules(domainMap map[string][]geosite.Item) {
 			case strings.HasPrefix(line, "regexp:"):
 				item = geosite.Item{Type: geosite.RuleTypeDomainRegex, Value: strings.TrimPrefix(line, "regexp:")}
 			default:
-				// 默认当作 domain_suffix
-				val := line
-				if !strings.HasPrefix(val, ".") {
-					val = "." + val
-				}
-				item = geosite.Item{Type: geosite.RuleTypeDomainSuffix, Value: val}
+				// 默认当作 domain_suffix（不再自动加前导点，适配 sing-box 1.9+ 行为）
+				item = geosite.Item{Type: geosite.RuleTypeDomainSuffix, Value: line}
 			}
 			extra = append(extra, item)
 		}
