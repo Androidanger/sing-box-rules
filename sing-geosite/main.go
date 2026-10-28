@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -170,6 +171,67 @@ func parse(vGeositeData []byte) (map[string][]geosite.Item, error) {
 	return domainMap, nil
 }
 
+// loadCustomRules 从 ../custom/geosite/ 目录加载自定义规则并合并到 domainMap
+// 文件名格式：{code}.txt，例如 gfw.txt 会合并到 gfw 类别
+func loadCustomRules(domainMap map[string][]geosite.Item) {
+	customDir := filepath.Join("..", "custom", "geosite")
+	entries, err := os.ReadDir(customDir)
+	if err != nil {
+		// 目录不存在就直接跳过，不影响正常生成
+		return
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".txt") {
+			continue
+		}
+		code := strings.TrimSuffix(entry.Name(), ".txt")
+		code = strings.ToLower(code)
+
+		filePath := filepath.Join(customDir, entry.Name())
+		f, err := os.Open(filePath)
+		if err != nil {
+			log.Warn("无法打开自定义规则文件: ", filePath, " error: ", err)
+			continue
+		}
+
+		var extra []geosite.Item
+		scanner := bufio.NewScanner(f)
+		for scanner.Scan() {
+			line := strings.TrimSpace(scanner.Text())
+			if line == "" || strings.HasPrefix(line, "#") {
+				continue
+			}
+
+			var item geosite.Item
+			switch {
+			case strings.HasPrefix(line, "full:"):
+				item = geosite.Item{Type: geosite.RuleTypeDomain, Value: strings.TrimPrefix(line, "full:")}
+			case strings.HasPrefix(line, "keyword:"):
+				item = geosite.Item{Type: geosite.RuleTypeDomainKeyword, Value: strings.TrimPrefix(line, "keyword:")}
+			case strings.HasPrefix(line, "regexp:"):
+				item = geosite.Item{Type: geosite.RuleTypeDomainRegex, Value: strings.TrimPrefix(line, "regexp:")}
+			default:
+				// 默认当作 domain_suffix
+				val := line
+				if !strings.HasPrefix(val, ".") {
+					val = "." + val
+				}
+				item = geosite.Item{Type: geosite.RuleTypeDomainSuffix, Value: val}
+			}
+			extra = append(extra, item)
+		}
+		f.Close()
+
+		if len(extra) == 0 {
+			continue
+		}
+
+		log.Info("加载自定义规则: ", code, " 共 ", len(extra), " 条")
+		domainMap[code] = common.Uniq(append(domainMap[code], extra...))
+	}
+}
+
 func generate(release *github.RepositoryRelease, output string, cnOutput string, ruleSetOutput string) error {
 	vData, err := download(release)
 	if err != nil {
@@ -179,6 +241,10 @@ func generate(release *github.RepositoryRelease, output string, cnOutput string,
 	if err != nil {
 		return err
 	}
+
+	// 合并自定义规则（关键）
+	loadCustomRules(domainMap)
+
 	outputPath, _ := filepath.Abs(output)
 	os.Stderr.WriteString("write " + outputPath + "\n")
 	outputFile, err := os.Create(output)
