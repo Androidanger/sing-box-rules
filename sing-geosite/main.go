@@ -203,22 +203,32 @@ func loadCustomRules(domainMap map[string][]geosite.Item) {
 				continue
 			}
 
-			var item geosite.Item
 			switch {
 			case strings.HasPrefix(line, "full:"):
-				item = geosite.Item{Type: geosite.RuleTypeDomain, Value: strings.TrimPrefix(line, "full:")}
+				// 只加精确匹配
+				extra = append(extra, geosite.Item{Type: geosite.RuleTypeDomain, Value: strings.TrimPrefix(line, "full:")})
 			case strings.HasPrefix(line, "keyword:"):
-				item = geosite.Item{Type: geosite.RuleTypeDomainKeyword, Value: strings.TrimPrefix(line, "keyword:")}
+				extra = append(extra, geosite.Item{Type: geosite.RuleTypeDomainKeyword, Value: strings.TrimPrefix(line, "keyword:")})
 			case strings.HasPrefix(line, "regexp:"):
-				item = geosite.Item{Type: geosite.RuleTypeDomainRegex, Value: strings.TrimPrefix(line, "regexp:")}
+				extra = append(extra, geosite.Item{Type: geosite.RuleTypeDomainRegex, Value: strings.TrimPrefix(line, "regexp:")})
 			case strings.HasPrefix(line, "suffix:"):
-				// 明确指定用 domain_suffix
-				item = geosite.Item{Type: geosite.RuleTypeDomainSuffix, Value: strings.TrimPrefix(line, "suffix:")}
+				// 只加 domain_suffix
+				val := strings.TrimPrefix(line, "suffix:")
+				if !strings.HasPrefix(val, ".") {
+					val = "." + val
+				}
+				extra = append(extra, geosite.Item{Type: geosite.RuleTypeDomainSuffix, Value: val})
 			default:
-				// 默认当作 domain（精确匹配），写入 "domain" 字段
-				item = geosite.Item{Type: geosite.RuleTypeDomain, Value: line}
+				// 默认和上游 RootDomain 一样：同时加 domain + domain_suffix
+				// domain: 精确匹配（无前导点）
+				extra = append(extra, geosite.Item{Type: geosite.RuleTypeDomain, Value: line})
+				// domain_suffix: 后缀匹配（带前导点）
+				suffix := line
+				if !strings.HasPrefix(suffix, ".") {
+					suffix = "." + suffix
+				}
+				extra = append(extra, geosite.Item{Type: geosite.RuleTypeDomainSuffix, Value: suffix})
 			}
-			extra = append(extra, item)
 		}
 		f.Close()
 
