@@ -211,9 +211,12 @@ func loadCustomRules(domainMap map[string][]geosite.Item) {
 				item = geosite.Item{Type: geosite.RuleTypeDomainKeyword, Value: strings.TrimPrefix(line, "keyword:")}
 			case strings.HasPrefix(line, "regexp:"):
 				item = geosite.Item{Type: geosite.RuleTypeDomainRegex, Value: strings.TrimPrefix(line, "regexp:")}
+			case strings.HasPrefix(line, "suffix:"):
+				// 明确指定用 domain_suffix
+				item = geosite.Item{Type: geosite.RuleTypeDomainSuffix, Value: strings.TrimPrefix(line, "suffix:")}
 			default:
-				// 默认当作 domain_suffix（不再自动加前导点，适配 sing-box 1.9+ 行为）
-				item = geosite.Item{Type: geosite.RuleTypeDomainSuffix, Value: line}
+				// 默认当作 domain（精确匹配），写入 "domain" 字段
+				item = geosite.Item{Type: geosite.RuleTypeDomain, Value: line}
 			}
 			extra = append(extra, item)
 		}
